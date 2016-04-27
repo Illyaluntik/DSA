@@ -2,7 +2,6 @@
 // Stanislav Jakubek, 5.10.2015 09:37:23
 
 void* pamat;
-//toto includje funkcie na prácu zo štandardným vstupom
 #include <stdio.h>
 
 void *memory_alloc(unsigned int size)
