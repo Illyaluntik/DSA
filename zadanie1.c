@@ -10,7 +10,7 @@ void *memory_alloc(unsigned int size)
   
   while ((*(int *) (pamat + akt) > 0 ) &&
          (*(int *) (pamat + akt) + size > 0) &&
-         ((pamat + akt) <= (pamat + *(int *)pamat - 1))) {
+         ((pamat + akt) < (pamat + *(int *)pamat))) {
     //najdenie dostatocne velkej volnej pamate
     akt += *(int *) (pamat + akt) + sizeof(int);
   }
@@ -68,7 +68,7 @@ int memory_check(void *ptr)
   int akt = sizeof(int);
   
   while (((pamat + akt + sizeof(int)) != ptr) &&
-         ((pamat + akt) <= (pamat + *(int *)pamat - 1))) {
+         ((pamat + akt) < (pamat + *(int *)pamat))) {
     //najdenie zadaneho smernika
     if (*(int *) (pamat + akt) > 0) {
       akt += *(int *) (pamat + akt) + sizeof(int);
@@ -78,7 +78,7 @@ int memory_check(void *ptr)
     }
   }
   
-  if ((pamat + akt) <= (pamat + *(int *)pamat - 1) &&
+  if ((pamat + akt) < (pamat + *(int *)pamat) &&
       ((pamat + akt + sizeof(int)) == ptr) &&
       (*(int *)(pamat + akt) < 0)) {
     //ak je smernik platny
