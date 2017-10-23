@@ -49,7 +49,8 @@ void *memory_alloc(unsigned int size) {
 	}
 	
 	// Ak prvy volny blok je dostatocne velky a da sa rozdelit
-	if (((signed int) (size - pov_dlzka) < 0) && (pov_dlzka >= 6 * sizeof(int))) {
+	if (((signed int) (size - pov_dlzka) < 0) &&
+		(pov_dlzka >= 6 * sizeof(int)) && ((pov_dlzka - size) >= 4 * sizeof(int))) {
 		unsigned int hlavicka = pov_hlavicka;
 		unsigned int paticka, dlzka;
 		
@@ -90,6 +91,7 @@ void *memory_alloc(unsigned int size) {
 		flip(pov_paticka);
 		set(sizeof(int), 0);
 		
+		// TODO Dokoncit presmerovanie smernikov
 		/*if (next > 0) {
 			set(next + 2 * sizeof(int), prev);
 		}*/
@@ -156,14 +158,12 @@ int memory_free(void *valid_ptr) {
 		unsigned int prev_dlzka = - get(prev_paticka);
 		unsigned int prev_hlavicka = prev_paticka - prev_dlzka - sizeof(int);
 		int next_next = get(next_hlavicka + sizeof(int));
-		int prev_prev = get(prev_hlavicka + 2 * sizeof(int));
 		unsigned int new_dlzka = prev_dlzka + dlzka + next_dlzka + 4 * sizeof(int);
 		
 		if (debug) {
 			printf("Uvolnovany blok je obkoleseny volnymi blokmi\n");
 			printf("prev_dlzka: %u\n", prev_dlzka);
 			printf("prev_paticka: %u\n", prev_paticka);
-			printf("prev_prev: %d\n", prev_prev);
 			printf("next_dlzka: %u\n", next_dlzka);
 			printf("next_paticka: %u\n", next_paticka);
 			printf("next_next: %d\n", next_next);
@@ -172,13 +172,16 @@ int memory_free(void *valid_ptr) {
 
 		set(prev_hlavicka, - new_dlzka);
 		set(next_paticka, - new_dlzka);
-		set(prev_hlavicka + sizeof(int), -1);
-		set(prev_hlavicka + 2 * sizeof(int), -1);
+		set(prev_hlavicka + sizeof(int), next_next);
+		
+		if (next_next > 0) {
+			set(next_next + 2 * sizeof(int), prev_hlavicka);
+		}
 
 		if (debug) { vypis(); }
 		return 0;
 	}
-	// Ak za uvolnenym blokom nasleduje dalsi volny
+	// Ak za uvolnenym blokom nasleduje dalsi volny blok
 	else if ((next_hlavicka < get(0)) && (get(next_hlavicka) < 0)) {
 		unsigned int next_dlzka = - get(next_hlavicka);
 		unsigned int next_paticka = next_hlavicka + next_dlzka + sizeof(int);
@@ -206,18 +209,17 @@ int memory_free(void *valid_ptr) {
 		// Uprava smernikov v prislusnych poliach
 		if (next_next > 0) { set(next_next + 2 * sizeof(int), hlavicka); }
 		if (next_prev > 0) { set(next_prev + sizeof(int), hlavicka); }
+		
+		set(hlavicka + sizeof(int), next_next);
+		set(hlavicka + 2 * sizeof(int), next_prev);
 
 		// Ak bol nasledujuci volny blok prvy volny
 		if (get(sizeof(int)) == next_hlavicka) { set(sizeof(int), hlavicka); }
-		
-		// TODO Najst okolite volne bloky
-		set(hlavicka + sizeof(int), -1);
-		set(hlavicka + 2 * sizeof(int), -1);
 
 		if (debug) { vypis(); }
 		return 0;
 	}
-	// Ak uvolnovanemu bloku predchadza dalsi volny
+	// Ak uvolnovanemu bloku predchadza dalsi volny blok
 	else if ((prev_paticka > sizeof(int)) && (get(prev_paticka) < 0)) {
 		unsigned int prev_dlzka = - get(prev_paticka);
 		unsigned int prev_hlavicka = prev_paticka - prev_dlzka - sizeof(int);
@@ -238,10 +240,15 @@ int memory_free(void *valid_ptr) {
 	}
 	
 	// TODO Najst okolite volne bloky
-	set(hlavicka + sizeof(int), -1);
-	set(hlavicka + 2 * sizeof(int), -1);
-
-	if (hlavicka < get(sizeof(int))) { set(sizeof(int), hlavicka); }
+	// Ak je novy prazdny blok prvy v poradi
+	if (hlavicka < get(sizeof(int))) {
+		set(hlavicka + sizeof(int), get(sizeof(int)));
+		set(hlavicka + 2 * sizeof(int), -1);
+		set(sizeof(int), hlavicka);
+	}
+	else {
+		
+	}
 
 	if (debug) { vypis(); }
 	return 0;
