@@ -249,6 +249,9 @@ int memory_free(void *valid_ptr) {
 	else {
 		
 	}
+	
+	set(hlavicka + sizeof(int), -1);
+	set(hlavicka + 2 * sizeof(int), -1);
 
 	if (debug) { vypis(); }
 	return 0;
