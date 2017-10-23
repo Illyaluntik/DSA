@@ -40,8 +40,8 @@ void *memory_alloc(unsigned int size) {
 
 	int next = get(pov_hlavicka + sizeof(int));
 	int prev = get(pov_hlavicka + 2 * sizeof(int));
-	int pov_dlzka = get(pov_hlavicka);
-	unsigned int pov_paticka = pov_hlavicka - pov_dlzka + sizeof(int);
+	int pov_dlzka = - get(pov_hlavicka);
+	unsigned int pov_paticka = pov_hlavicka + pov_dlzka + sizeof(int);
 	
 	if (debug) {
 		printf("pov_dlzka: %d\n", pov_dlzka);
@@ -49,7 +49,7 @@ void *memory_alloc(unsigned int size) {
 	}
 	
 	// Ak prvy volny blok je dostatocne velky a da sa rozdelit
-	if (((signed int) (size + pov_dlzka) < 0) && (pov_dlzka <= - 6 * sizeof(int))) {
+	if (((signed int) (size - pov_dlzka) < 0) && (pov_dlzka >= 6 * sizeof(int))) {
 		unsigned int hlavicka = pov_hlavicka;
 		unsigned int paticka, dlzka;
 		
@@ -71,7 +71,7 @@ void *memory_alloc(unsigned int size) {
 			printf("paticka: %u\n", paticka);
 		}
 		
-		int nova_dlzka = pov_dlzka + dlzka + 2 * sizeof(int);
+		int nova_dlzka = - (pov_dlzka - dlzka - 2 * sizeof(int));
 		
 		set(hlavicka, dlzka);
 		set(paticka, dlzka);
@@ -85,7 +85,7 @@ void *memory_alloc(unsigned int size) {
 		return (pamat + hlavicka + sizeof(int));
 	}
 	// Ak prvy volny blok je prave rovnako velky alebo nerozdelitelny
-	else if ((signed int) (size + pov_dlzka) <= 0) {
+	else if ((signed int) (size - pov_dlzka) <= 0) {
 		flip(pov_hlavicka);
 		flip(pov_paticka);
 		set(sizeof(int), 0);
@@ -156,21 +156,24 @@ int memory_free(void *valid_ptr) {
 		unsigned int prev_dlzka = - get(prev_paticka);
 		unsigned int prev_hlavicka = prev_paticka - prev_dlzka - sizeof(int);
 		int next_next = get(next_hlavicka + sizeof(int));
-		int next_prev = get(next_hlavicka + 2 * sizeof(int));
-		int prev_next = get(prev_hlavicka + sizeof(int));
 		int prev_prev = get(prev_hlavicka + 2 * sizeof(int));
+		unsigned int new_dlzka = prev_dlzka + dlzka + next_dlzka + 4 * sizeof(int);
 		
 		if (debug) {
 			printf("Uvolnovany blok je obkoleseny volnymi blokmi\n");
 			printf("prev_dlzka: %u\n", prev_dlzka);
 			printf("prev_paticka: %u\n", prev_paticka);
-			printf("prev_next: %d\n", prev_next);
 			printf("prev_prev: %d\n", prev_prev);
 			printf("next_dlzka: %u\n", next_dlzka);
 			printf("next_paticka: %u\n", next_paticka);
 			printf("next_next: %d\n", next_next);
-			printf("next_prev: %d\n", next_prev);
+			printf("new_dlzka: %u\n", dlzka);
 		}
+
+		set(prev_hlavicka, - new_dlzka);
+		set(next_paticka, - new_dlzka);
+		set(prev_hlavicka + sizeof(int), -1);
+		set(prev_hlavicka + 2 * sizeof(int), -1);
 
 		if (debug) { vypis(); }
 		return 0;
@@ -218,21 +221,17 @@ int memory_free(void *valid_ptr) {
 	else if ((prev_paticka > sizeof(int)) && (get(prev_paticka) < 0)) {
 		unsigned int prev_dlzka = - get(prev_paticka);
 		unsigned int prev_hlavicka = prev_paticka - prev_dlzka - sizeof(int);
-		int prev_next = get(prev_hlavicka + sizeof(int));
-		int prev_prev = get(prev_hlavicka + 2 * sizeof(int));
-		unsigned int new_dlzka = prev_dlzka - dlzka - 2 * sizeof(int);
+		unsigned int new_dlzka = prev_dlzka + dlzka + 2 * sizeof(int);
 		
 		if (debug) {
 			printf("Uvolnovanemu bloku predchadza dalsi volny\n");
 			printf("prev_dlzka: %u\n", prev_dlzka);
 			printf("prev_paticka: %u\n", prev_paticka);
-			printf("prev_next: %d\n", prev_next);
-			printf("prev_prev: %d\n", prev_prev);
-			printf("new_dlzka: %u\n", new_dlzka);
+			printf("new_dlzka: %d\n", new_dlzka);
 		}
 		
-		set(prev_hlavicka, new_dlzka);
-		set(paticka, new_dlzka);
+		set(prev_hlavicka, - new_dlzka);
+		set(paticka, - new_dlzka);
 
 		if (debug) { vypis(); }
 		return 0;
@@ -241,6 +240,8 @@ int memory_free(void *valid_ptr) {
 	// TODO Najst okolite volne bloky
 	set(hlavicka + sizeof(int), -1);
 	set(hlavicka + 2 * sizeof(int), -1);
+
+	if (hlavicka < get(sizeof(int))) { set(sizeof(int), hlavicka); }
 
 	if (debug) { vypis(); }
 	return 0;
