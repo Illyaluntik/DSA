@@ -44,73 +44,106 @@ void *memory_alloc(unsigned int size) {
 	unsigned int pov_paticka = pov_hlavicka + pov_dlzka + sizeof(int);
 	
 	if (debug) {
+		printf("next: %d\n", next);
+		printf("prev: %d\n", prev);
 		printf("pov_dlzka: %d\n", pov_dlzka);
 		printf("pov_paticka: %u\n", pov_paticka);
 	}
 	
-	// Ak prvy volny blok je dostatocne velky a da sa rozdelit
-	if (((signed int) (size - pov_dlzka) < 0) &&
+	while (1) {
+		// Ak je volny blok dostatocne velky a da sa rozdelit
+		if (((signed int) (size - pov_dlzka) < 0) &&
 		(pov_dlzka >= 6 * sizeof(int)) && ((pov_dlzka - size) >= 4 * sizeof(int))) {
-		unsigned int hlavicka = pov_hlavicka;
-		unsigned int paticka, dlzka;
-		
-		if ((size % sizeof(int)) == 0) {
-			paticka = hlavicka + size + sizeof(int);
-			dlzka = size;
+			unsigned int hlavicka = pov_hlavicka;
+			unsigned int paticka, dlzka;
+				
+			if ((size % sizeof(int)) == 0) {
+				paticka = hlavicka + size + sizeof(int);
+				dlzka = size;
+			}
+			// Sizeof(int) Padding
+			else {
+				int pom = size / sizeof(int);
+				pom = (pom + 1) * sizeof(int);
+				paticka = hlavicka + pom + sizeof(int);
+				dlzka = pom;
+			}
+				
+			if (debug) {
+				printf("hlavicka: %u\n", hlavicka);
+				printf("dlzka: %u\n", dlzka);
+				printf("paticka: %u\n", paticka);
+				printf("next: %d\n", next);
+			}
+				
+			int nova_dlzka = - (pov_dlzka - dlzka - 2 * sizeof(int));
+				
+			set(hlavicka, dlzka);
+			set(paticka, dlzka);
+			set(paticka + sizeof(int), nova_dlzka);
+			set(pov_paticka, nova_dlzka);
+			if (prev < 0) set(sizeof(int), paticka + sizeof(int));
+			else {
+				set(prev + sizeof(int), paticka + sizeof(int));
+			}
+			set(paticka + 2 * sizeof(int), next);
+			set(paticka + 3 * sizeof(int), prev);
+				
+			if (next > 0) {
+				set(next + 2 * sizeof(int), paticka + sizeof(int));
+			}
+				
+			if (debug) { vypis(); }
+			return (pamat + hlavicka + sizeof(int));
 		}
-		// Sizeof(int) Padding
-		else {
-			int pom = size / sizeof(int);
-			pom = (pom + 1) * sizeof(int);
-			paticka = hlavicka + pom + sizeof(int);
-			dlzka = pom;
-		}
-		
-		if (debug) {
-			printf("hlavicka: %u\n", hlavicka);
-			printf("dlzka: %u\n", dlzka);
-			printf("paticka: %u\n", paticka);
-			printf("next: %d\n", next);
-		}
-		
-		int nova_dlzka = - (pov_dlzka - dlzka - 2 * sizeof(int));
-		
-		set(hlavicka, dlzka);
-		set(paticka, dlzka);
-		set(paticka + sizeof(int), nova_dlzka);
-		set(pov_paticka, nova_dlzka);
-		set(sizeof(int), paticka + sizeof(int));
-		set(paticka + 2 * sizeof(int), next);
-		set(paticka + 3 * sizeof(int), prev);
+		// Ak je volny blok prave rovnako velky alebo nerozdelitelny
+		else if ((signed int) (size - pov_dlzka) <= 0) {
+			flip(pov_hlavicka);
+			flip(pov_paticka);
 
-		if (next > 0) {
-			set(next + 2 * sizeof(int), paticka + sizeof(int));
+			if (get(sizeof(int)) == pov_hlavicka) {
+				if (next < 0) {
+					set(sizeof(int), 0);
+				}
+				else {
+					set(sizeof(int), next);
+				}
+			}
+
+			if (next > 0) {
+				set(next + 2 * sizeof(int), prev);
+			}
+
+			if (prev > 0) {
+				set(prev + sizeof(int), next);
+			}
+
+			if (debug) {
+				printf("Volny blok je rovnako velky alebo nerozdelitelny\n");
+			}
+				
+			if (debug) { vypis(); }
+			return (pamat + pov_hlavicka + sizeof(int));
 		}
-		
-		if (debug) { vypis(); }
-		return (pamat + hlavicka + sizeof(int));
-	}
-	// Ak prvy volny blok je prave rovnako velky alebo nerozdelitelny
-	else if ((signed int) (size - pov_dlzka) <= 0) {
-		flip(pov_hlavicka);
-		flip(pov_paticka);
-		set(sizeof(int), 0);
-		
+			
 		if (next > 0) {
-			set(sizeof(int), next);
-			set(next + 2 * sizeof(int), -1);
+			pov_hlavicka = next;
+			next = get(pov_hlavicka + sizeof(int));
+			prev = get(pov_hlavicka + 2 * sizeof(int));
+			pov_dlzka = - get(pov_hlavicka);
+			pov_paticka = pov_hlavicka + pov_dlzka + sizeof(int);
 		}
-		
-		if (debug) { vypis(); }
-		return (pamat + pov_hlavicka + sizeof(int));
-	}
-	// Ak prvy volny blok nie je dostatocne velky
-	else {
-		// TODO
+		else { break; }
+
 		if (debug) {
-			printf("Prvy volny blok nie je dostatocne velky\n");
+			printf("pov_hlavicka: %u\n", pov_hlavicka);
+			printf("next: %d\n", next);
+			printf("prev: %d\n", prev);
+			printf("pov_dlzka: %d\n", pov_dlzka);
+			printf("pov_paticka: %u\n", pov_paticka);
 		}
 	}
+
 	
 	if (debug) { vypis(); }
 	return NULL;
@@ -217,9 +250,6 @@ int memory_free(void *valid_ptr) {
 		// Uprava smernikov v prislusnych poliach
 		if (next_next > 0) { set(next_next + 2 * sizeof(int), hlavicka); }
 		if (next_prev > 0) { set(next_prev + sizeof(int), hlavicka); }
-		
-		set(hlavicka + sizeof(int), next_next);
-		set(hlavicka + 2 * sizeof(int), next_prev);
 
 		// Ak bol nasledujuci volny blok prvy volny
 		if (get(sizeof(int)) == next_hlavicka) { set(sizeof(int), hlavicka); }
@@ -271,14 +301,13 @@ int memory_free(void *valid_ptr) {
 		
 		while (1) {
 			int pom = get(akt + sizeof(int));
-
-			if (debug) {
-				printf("akt: %d\n", akt);
-				printf("pom: %d\n", pom);
-			}
 			
 			if (pom > 0) {
 				if (pom < hlavicka) {
+					if (debug) {
+						printf("akt: %d\n", akt);
+						printf("pom: %d\n", pom);
+					}
 					akt = pom;
 					continue;
 				}
@@ -347,11 +376,6 @@ void memory_init(void *ptr, unsigned int size) {
 	
 	for (i = 5 * sizeof(int); i < size - sizeof(int); i += sizeof(int)) {
 		set(i, 0);
-	}
-	
-	if (debug) {
-		printf("memory_init Debug:\n");
-		vypis();
 	}
 	
 	// Priprava na hlavicky variabilnej velkosti
