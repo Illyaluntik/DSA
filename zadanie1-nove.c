@@ -45,7 +45,7 @@ void *memory_alloc(unsigned int size) {
 	
 	if (debug) {
 		printf("pov_dlzka: %d\n", pov_dlzka);
-		printf("pov_paticka: %d\n", pov_paticka);
+		printf("pov_paticka: %u\n", pov_paticka);
 	}
 	
 	// Ak prvy volny blok je dostatocne velky a da sa rozdelit
@@ -100,10 +100,6 @@ void *memory_alloc(unsigned int size) {
 	// Ak prvy volny blok nie je dostatocne velky
 	else {
 		// TODO
-		/*while (next > 0) {
-			
-			return NULL;
-		}*/
 	}
 	
 	if (debug) { vypis(); }
@@ -118,9 +114,9 @@ int memory_free(void *valid_ptr) {
 	
 	if (debug) {
 		printf("memory_free Debug:\n");
-		printf("hlavicka: %d\n", hlavicka);
-		printf("dlzka: %d\n", dlzka);
-		printf("paticka: %d\n", paticka);
+		printf("hlavicka: %u\n", hlavicka);
+		printf("dlzka: %u\n", dlzka);
+		printf("paticka: %u\n", paticka);
 	}
 	
 	// Zmena hodnoty hlavicky na zapornu
@@ -148,20 +144,48 @@ int memory_free(void *valid_ptr) {
 	
 	if (debug) {
 		printf("Nie je to jediny volny blok\n");
-		printf("next_hlavicka: %d\n", next_hlavicka);
-		printf("prev_paticka: %d\n", prev_paticka);
+		printf("next_hlavicka: %u\n", next_hlavicka);
+		printf("prev_paticka: %u\n", prev_paticka);
 	}
 	
+	// Ak je uvolneny blok obkoleseny volnymi blokmi
+	if ((next_hlavicka < get(0)) && (get(next_hlavicka) < 0) &&
+		(prev_paticka > sizeof(int)) && (get(prev_paticka) < 0)) {
+		unsigned int next_dlzka = - get(next_hlavicka);
+		unsigned int next_paticka = next_hlavicka + next_dlzka + sizeof(int);
+		unsigned int prev_dlzka = - get(prev_paticka);
+		unsigned int prev_hlavicka = prev_paticka - prev_dlzka - sizeof(int);
+		int next_next = get(next_hlavicka + sizeof(int));
+		int next_prev = get(next_hlavicka + 2 * sizeof(int));
+		int prev_next = get(prev_hlavicka + sizeof(int));
+		int prev_prev = get(prev_hlavicka + 2 * sizeof(int));
+		
+		if (debug) {
+			printf("Uvolnovany blok je obkoleseny volnymi blokmi\n");
+			printf("prev_dlzka: %u\n", prev_dlzka);
+			printf("prev_paticka: %u\n", prev_paticka);
+			printf("prev_next: %d\n", prev_next);
+			printf("prev_prev: %d\n", prev_prev);
+			printf("next_dlzka: %u\n", next_dlzka);
+			printf("next_paticka: %u\n", next_paticka);
+			printf("next_next: %d\n", next_next);
+			printf("next_prev: %d\n", next_prev);
+		}
+
+		if (debug) { vypis(); }
+		return 0;
+	}
 	// Ak za uvolnenym blokom nasleduje dalsi volny
-	if ((next_hlavicka < (get(0))) && (get(next_hlavicka) < 0)) {
+	else if ((next_hlavicka < get(0)) && (get(next_hlavicka) < 0)) {
 		unsigned int next_dlzka = - get(next_hlavicka);
 		unsigned int next_paticka = next_hlavicka + next_dlzka + sizeof(int);
 		int next_next = get(next_hlavicka + sizeof(int));
 		int next_prev = get(next_hlavicka + 2 * sizeof(int));
 		
 		if (debug) {
-			printf("next_dlzka: %d\n", next_dlzka);
-			printf("next_paticka: %d\n", next_paticka);
+			printf("Za uvolnovanym blokom nasleduje dalsi volny\n");
+			printf("next_dlzka: %u\n", next_dlzka);
+			printf("next_paticka: %u\n", next_paticka);
 			printf("next_next: %d\n", next_next);
 			printf("next_prev: %d\n", next_prev);
 		}
@@ -186,8 +210,38 @@ int memory_free(void *valid_ptr) {
 		// TODO Najst okolite volne bloky
 		set(hlavicka + sizeof(int), -1);
 		set(hlavicka + 2 * sizeof(int), -1);
+
+		if (debug) { vypis(); }
+		return 0;
+	}
+	// Ak uvolnovanemu bloku predchadza dalsi volny
+	else if ((prev_paticka > sizeof(int)) && (get(prev_paticka) < 0)) {
+		unsigned int prev_dlzka = - get(prev_paticka);
+		unsigned int prev_hlavicka = prev_paticka - prev_dlzka - sizeof(int);
+		int prev_next = get(prev_hlavicka + sizeof(int));
+		int prev_prev = get(prev_hlavicka + 2 * sizeof(int));
+		unsigned int new_dlzka = prev_dlzka - dlzka - 2 * sizeof(int);
+		
+		if (debug) {
+			printf("Uvolnovanemu bloku predchadza dalsi volny\n");
+			printf("prev_dlzka: %u\n", prev_dlzka);
+			printf("prev_paticka: %u\n", prev_paticka);
+			printf("prev_next: %d\n", prev_next);
+			printf("prev_prev: %d\n", prev_prev);
+			printf("new_dlzka: %u\n", new_dlzka);
+		}
+		
+		set(prev_hlavicka, new_dlzka);
+		set(paticka, new_dlzka);
+
+		if (debug) { vypis(); }
+		return 0;
 	}
 	
+	// TODO Najst okolite volne bloky
+	set(hlavicka + sizeof(int), -1);
+	set(hlavicka + 2 * sizeof(int), -1);
+
 	if (debug) { vypis(); }
 	return 0;
 }
