@@ -96,7 +96,6 @@ void *memory_alloc(unsigned int size) {
 		flip(pov_paticka);
 		set(sizeof(int), 0);
 		
-		// TODO Dokoncit presmerovanie smernikov
 		if (next > 0) {
 			set(sizeof(int), next);
 			set(next + 2 * sizeof(int), -1);
