@@ -70,6 +70,7 @@ void *memory_alloc(unsigned int size) {
 			printf("hlavicka: %u\n", hlavicka);
 			printf("dlzka: %u\n", dlzka);
 			printf("paticka: %u\n", paticka);
+			printf("next: %d\n", next);
 		}
 		
 		int nova_dlzka = - (pov_dlzka - dlzka - 2 * sizeof(int));
@@ -81,6 +82,10 @@ void *memory_alloc(unsigned int size) {
 		set(sizeof(int), paticka + sizeof(int));
 		set(paticka + 2 * sizeof(int), next);
 		set(paticka + 3 * sizeof(int), prev);
+
+		if (next > 0) {
+			set(next + 2 * sizeof(int), paticka + sizeof(int));
+		}
 		
 		if (debug) { vypis(); }
 		return (pamat + hlavicka + sizeof(int));
@@ -92,9 +97,10 @@ void *memory_alloc(unsigned int size) {
 		set(sizeof(int), 0);
 		
 		// TODO Dokoncit presmerovanie smernikov
-		/*if (next > 0) {
-			set(next + 2 * sizeof(int), prev);
-		}*/
+		if (next > 0) {
+			set(sizeof(int), next);
+			set(next + 2 * sizeof(int), -1);
+		}
 		
 		if (debug) { vypis(); }
 		return (pamat + pov_hlavicka + sizeof(int));
@@ -102,6 +108,9 @@ void *memory_alloc(unsigned int size) {
 	// Ak prvy volny blok nie je dostatocne velky
 	else {
 		// TODO
+		if (debug) {
+			printf("Prvy volny blok nie je dostatocne velky\n");
+		}
 	}
 	
 	if (debug) { vypis(); }
@@ -239,19 +248,57 @@ int memory_free(void *valid_ptr) {
 		return 0;
 	}
 	
-	// TODO Najst okolite volne bloky
+	set(hlavicka + sizeof(int), -1);
+	set(hlavicka + 2 * sizeof(int), -1);
+	
 	// Ak je novy prazdny blok prvy v poradi
 	if (hlavicka < get(sizeof(int))) {
+		if (debug) {
+			printf("Novy prazdny blok je prvy v poradi\n");
+		}
+
+		set(get(sizeof(int)) + 2 * sizeof(int), hlavicka);
 		set(hlavicka + sizeof(int), get(sizeof(int)));
 		set(hlavicka + 2 * sizeof(int), -1);
 		set(sizeof(int), hlavicka);
 	}
+	// Ak nie je novy prazdny blok prvy v poradi
 	else {
+		int akt = get(sizeof(int));
+
+		if (debug) {
+			printf("Novy prazdny blok nie je prvy v poradi\n");
+		}
 		
+		while (1) {
+			int pom = get(akt + sizeof(int));
+
+			if (debug) {
+				printf("akt: %d\n", akt);
+				printf("pom: %d\n", pom);
+			}
+			
+			if (pom > 0) {
+				if (pom < hlavicka) {
+					akt = pom;
+					continue;
+				}
+				else {
+					set(akt + sizeof(int), hlavicka);
+					set(hlavicka + sizeof(int), pom);
+					set(hlavicka + 2 * sizeof(int), akt);
+					set(pom + 2 * sizeof(int), hlavicka);
+					break;
+				}
+			}
+			else {
+				set(akt + sizeof(int), hlavicka);
+				set(hlavicka + sizeof(int), -1);
+				set(hlavicka + 2 * sizeof(int), akt);
+				break;
+			}
+		}
 	}
-	
-	set(hlavicka + sizeof(int), -1);
-	set(hlavicka + 2 * sizeof(int), -1);
 
 	if (debug) { vypis(); }
 	return 0;
@@ -331,15 +378,21 @@ void memory_init(void *ptr, unsigned int size) {
 }
 
 int main() {
-  char region[64];
-  memory_init(region, 64);
+  char region[100];
+  memory_init(region, 100);
   printf("Main dostal z memory_alloc: %d\n", memory_alloc(20) - pamat);
   vypis();
   getchar();
   printf("Main dostal z memory_alloc: %d\n", memory_alloc(20) - pamat);
+  vypis();
+  getchar();
+  printf("Main dostal z memory_alloc: %d\n", memory_alloc(5) - pamat);
   vypis();
   getchar();
   printf("Memory free 40: %d\n", memory_free(region + 40));
+  vypis();
+  getchar();
+  printf("Main dostal z memory_alloc: %d\n", memory_alloc(21) - pamat);
   vypis();
   getchar();
   printf("Memory free 12: %d\n", memory_free(region + 12));
