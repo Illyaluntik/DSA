@@ -1,436 +1,805 @@
-void* pamat;
+// zadanie2.c -- Stanislav Jakúbek, 4.11.2017 16:50
+// zadanie2.c -- Zadanie 2 - Socialna siet
+// Stanislav Jakubek, 28.10.2015 16:43:11
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define debug 0
+#define velk_pola 2003
 
-void set(unsigned int poz, signed int hodnota) {
-	*(int *) (pamat + poz) = hodnota;
-}
+typedef struct uzivatel {
+  char* meno;
+  int pocetl, pocetp;
+  struct uzivatel *l, *p;
+} UZIVATEL;
 
-int get(unsigned int poz) {
-	return *(int *) (pamat + poz);
-}
+typedef struct stranka {
+  char* meno;
+  UZIVATEL* uzivatelia;
+} STRANKA;
 
-void flip(unsigned int poz) {
-	set(poz, -get(poz));
-}
+STRANKA* pole[velk_pola];
 
-void vypis() {
-	int i, size = *(int *) pamat;
-	
-	size = size - (size % sizeof(int));
-
-	for (i = 0; i < size; i += sizeof(int))
-		printf("%d:\t%d\n", i, get(i));
-}
-
-// Vrati smernik na alokovany kus pamate, inak NULL
-void *memory_alloc(unsigned int size) {
-	unsigned int pov_hlavicka = get(sizeof(int));
-
-	if (debug) {
-		printf("memory_alloc Debug:\n");
-		printf("size: %u\n", size);
-		printf("pov_hlavicka: %u\n", pov_hlavicka);
-	}
-	
-	// Ak v danom poli neexistuje volny blok
-	if (pov_hlavicka == 0) { return NULL; }
-
-	int next = get(pov_hlavicka + sizeof(int));
-	int prev = get(pov_hlavicka + 2 * sizeof(int));
-	int pov_dlzka = - get(pov_hlavicka);
-	unsigned int pov_paticka = pov_hlavicka + pov_dlzka + sizeof(int);
-	
-	if (debug) {
-		printf("next: %d\n", next);
-		printf("prev: %d\n", prev);
-		printf("pov_dlzka: %d\n", pov_dlzka);
-		printf("pov_paticka: %u\n", pov_paticka);
-	}
-	
-	while (1) {
-		// Ak je volny blok dostatocne velky a da sa rozdelit
-		if (((signed int) (size - pov_dlzka) < 0) &&
-		(pov_dlzka >= 6 * sizeof(int)) && ((pov_dlzka - size) >= 4 * sizeof(int))) {
-			unsigned int hlavicka = pov_hlavicka;
-			unsigned int paticka, dlzka;
-				
-			if ((size % sizeof(int)) == 0) {
-				paticka = hlavicka + size + sizeof(int);
-				dlzka = size;
-			}
-			// Sizeof(int) Padding
-			else {
-				int pom = size / sizeof(int);
-				pom = (pom + 1) * sizeof(int);
-				paticka = hlavicka + pom + sizeof(int);
-				dlzka = pom;
-			}
-				
-			if (debug) {
-				printf("hlavicka: %u\n", hlavicka);
-				printf("dlzka: %u\n", dlzka);
-				printf("paticka: %u\n", paticka);
-				printf("next: %d\n", next);
-			}
-				
-			int nova_dlzka = - (pov_dlzka - dlzka - 2 * sizeof(int));
-				
-			set(hlavicka, dlzka);
-			set(paticka, dlzka);
-			set(paticka + sizeof(int), nova_dlzka);
-			set(pov_paticka, nova_dlzka);
-			if (prev < 0) set(sizeof(int), paticka + sizeof(int));
-			else {
-				set(prev + sizeof(int), paticka + sizeof(int));
-			}
-			set(paticka + 2 * sizeof(int), next);
-			set(paticka + 3 * sizeof(int), prev);
-				
-			if (next > 0) {
-				set(next + 2 * sizeof(int), paticka + sizeof(int));
-			}
-				
-			if (debug) { vypis(); }
-			return (pamat + hlavicka + sizeof(int));
-		}
-		// Ak je volny blok prave rovnako velky alebo nerozdelitelny
-		else if ((signed int) (size - pov_dlzka) <= 0) {
-			flip(pov_hlavicka);
-			flip(pov_paticka);
-
-			if (get(sizeof(int)) == pov_hlavicka) {
-				if (next < 0) {
-					set(sizeof(int), 0);
-				}
-				else {
-					set(sizeof(int), next);
-				}
-			}
-
-			if (next > 0) {
-				set(next + 2 * sizeof(int), prev);
-			}
-
-			if (prev > 0) {
-				set(prev + sizeof(int), next);
-			}
-
-			if (debug) {
-				printf("Volny blok je rovnako velky alebo nerozdelitelny\n");
-			}
-				
-			if (debug) { vypis(); }
-			return (pamat + pov_hlavicka + sizeof(int));
-		}
-			
-		if (next > 0) {
-			pov_hlavicka = next;
-			next = get(pov_hlavicka + sizeof(int));
-			prev = get(pov_hlavicka + 2 * sizeof(int));
-			pov_dlzka = - get(pov_hlavicka);
-			pov_paticka = pov_hlavicka + pov_dlzka + sizeof(int);
-		}
-		else { break; }
-
-		if (debug) {
-			printf("pov_hlavicka: %u\n", pov_hlavicka);
-			printf("next: %d\n", next);
-			printf("prev: %d\n", prev);
-			printf("pov_dlzka: %d\n", pov_dlzka);
-			printf("pov_paticka: %u\n", pov_paticka);
-		}
-	}
-
-	
-	if (debug) { vypis(); }
-	return NULL;
-}
-
-// Ak sa podarilo uvolnit pamat vrati 0, inak vrati 1
-int memory_free(void *valid_ptr) {
-	unsigned int hlavicka = valid_ptr - pamat - sizeof(int);
-	unsigned int dlzka = get(hlavicka);
-	unsigned int paticka = hlavicka + dlzka + sizeof(int);
-	
-	if (debug) {
-		printf("memory_free Debug:\n");
-		printf("hlavicka: %u\n", hlavicka);
-		printf("dlzka: %u\n", dlzka);
-		printf("paticka: %u\n", paticka);
-	}
-	
-	// Zmena hodnoty hlavicky na zapornu
-	flip(hlavicka);
-	
-	// Zmena hodnoty paticky na zapornu
-	flip(paticka);
-	
-	// Ak je toto jediny volny blok
-	if (get(sizeof(int)) == 0) {
-		set(sizeof(int), hlavicka);
-		set(valid_ptr - pamat, - 1);
-		set(valid_ptr - pamat + sizeof(int), -1);
-		
-		if (debug) {
-			printf("Je to jediny volny blok\n");
-			vypis();
-		}
-		
-		return 0;
-	}
-		
-	unsigned int next_hlavicka = paticka + sizeof(int);
-	unsigned int prev_paticka = hlavicka - sizeof(int);
-	
-	if (debug) {
-		printf("Nie je to jediny volny blok\n");
-		printf("next_hlavicka: %u\n", next_hlavicka);
-		printf("prev_paticka: %u\n", prev_paticka);
-	}
-	
-	// Ak je uvolneny blok obkoleseny volnymi blokmi
-	if ((next_hlavicka < get(0)) && (get(next_hlavicka) < 0) &&
-		(prev_paticka > sizeof(int)) && (get(prev_paticka) < 0)) {
-		unsigned int next_dlzka = - get(next_hlavicka);
-		unsigned int next_paticka = next_hlavicka + next_dlzka + sizeof(int);
-		unsigned int prev_dlzka = - get(prev_paticka);
-		unsigned int prev_hlavicka = prev_paticka - prev_dlzka - sizeof(int);
-		int next_next = get(next_hlavicka + sizeof(int));
-		unsigned int new_dlzka = prev_dlzka + dlzka + next_dlzka + 4 * sizeof(int);
-		
-		if (debug) {
-			printf("Uvolnovany blok je obkoleseny volnymi blokmi\n");
-			printf("prev_dlzka: %u\n", prev_dlzka);
-			printf("prev_paticka: %u\n", prev_paticka);
-			printf("next_dlzka: %u\n", next_dlzka);
-			printf("next_paticka: %u\n", next_paticka);
-			printf("next_next: %d\n", next_next);
-			printf("new_dlzka: %u\n", dlzka);
-		}
-
-		set(prev_hlavicka, - new_dlzka);
-		set(next_paticka, - new_dlzka);
-		set(prev_hlavicka + sizeof(int), next_next);
-		
-		if (next_next > 0) {
-			set(next_next + 2 * sizeof(int), prev_hlavicka);
-		}
-
-		if (debug) { vypis(); }
-		return 0;
-	}
-	// Ak za uvolnenym blokom nasleduje dalsi volny blok
-	else if ((next_hlavicka < get(0)) && (get(next_hlavicka) < 0)) {
-		unsigned int next_dlzka = - get(next_hlavicka);
-		unsigned int next_paticka = next_hlavicka + next_dlzka + sizeof(int);
-		int next_next = get(next_hlavicka + sizeof(int));
-		int next_prev = get(next_hlavicka + 2 * sizeof(int));
-		
-		if (debug) {
-			printf("Za uvolnovanym blokom nasleduje dalsi volny\n");
-			printf("next_dlzka: %u\n", next_dlzka);
-			printf("next_paticka: %u\n", next_paticka);
-			printf("next_next: %d\n", next_next);
-			printf("next_prev: %d\n", next_prev);
-		}
-		
-		// Nastavenie novych "smernikov"
-		set(hlavicka + sizeof(int), next_next);
-		set(hlavicka + 2 * sizeof(int), next_prev);
-		
-		// Nastavenie hodnoty novej hlavicky
-		set(hlavicka, get(hlavicka) + get(next_hlavicka) - 2 * sizeof(int));
-		
-		// Nastavenie hodnoty novej paticky
-		set(next_paticka, get(hlavicka));
-		
-		// Uprava smernikov v prislusnych poliach
-		if (next_next > 0) { set(next_next + 2 * sizeof(int), hlavicka); }
-		if (next_prev > 0) { set(next_prev + sizeof(int), hlavicka); }
-
-		// Ak bol nasledujuci volny blok prvy volny
-		if (get(sizeof(int)) == next_hlavicka) { set(sizeof(int), hlavicka); }
-
-		if (debug) { vypis(); }
-		return 0;
-	}
-	// Ak uvolnovanemu bloku predchadza dalsi volny blok
-	else if ((prev_paticka > sizeof(int)) && (get(prev_paticka) < 0)) {
-		unsigned int prev_dlzka = - get(prev_paticka);
-		unsigned int prev_hlavicka = prev_paticka - prev_dlzka - sizeof(int);
-		unsigned int new_dlzka = prev_dlzka + dlzka + 2 * sizeof(int);
-		
-		if (debug) {
-			printf("Uvolnovanemu bloku predchadza dalsi volny\n");
-			printf("prev_dlzka: %u\n", prev_dlzka);
-			printf("prev_paticka: %u\n", prev_paticka);
-			printf("new_dlzka: %d\n", new_dlzka);
-		}
-		
-		set(prev_hlavicka, - new_dlzka);
-		set(paticka, - new_dlzka);
-
-		if (debug) { vypis(); }
-		return 0;
-	}
-	
-	set(hlavicka + sizeof(int), -1);
-	set(hlavicka + 2 * sizeof(int), -1);
-	
-	// Ak je novy prazdny blok prvy v poradi
-	if (hlavicka < get(sizeof(int))) {
-		if (debug) {
-			printf("Novy prazdny blok je prvy v poradi\n");
-		}
-
-		set(get(sizeof(int)) + 2 * sizeof(int), hlavicka);
-		set(hlavicka + sizeof(int), get(sizeof(int)));
-		set(hlavicka + 2 * sizeof(int), -1);
-		set(sizeof(int), hlavicka);
-	}
-	// Ak nie je novy prazdny blok prvy v poradi
-	else {
-		int akt = get(sizeof(int));
-
-		if (debug) {
-			printf("Novy prazdny blok nie je prvy v poradi\n");
-		}
-		
-		while (1) {
-			int pom = get(akt + sizeof(int));
-			
-			if (pom > 0) {
-				if (pom < hlavicka) {
-					if (debug) {
-						printf("akt: %d\n", akt);
-						printf("pom: %d\n", pom);
-					}
-					akt = pom;
-					continue;
-				}
-				else {
-					set(akt + sizeof(int), hlavicka);
-					set(hlavicka + sizeof(int), pom);
-					set(hlavicka + 2 * sizeof(int), akt);
-					set(pom + 2 * sizeof(int), hlavicka);
-					break;
-				}
-			}
-			else {
-				set(akt + sizeof(int), hlavicka);
-				set(hlavicka + sizeof(int), -1);
-				set(hlavicka + 2 * sizeof(int), akt);
-				break;
-			}
-		}
-	}
-
-	if (debug) { vypis(); }
-	return 0;
-}
-
-// Ak je smernik platny vrati 1, ak neplatny vrati 0
-int memory_check(void *ptr) {
-	if (debug) {
-		printf("memory_check Debug:\n");
-	}
-	
-	// Kontrola ci je dana pamat v rozsahu
-	if (ptr > (pamat + *(int *)pamat)) { return 0; }
-	
-	int hlavicka = get(ptr - pamat - sizeof(int));
-	
-	if (debug) {
-		printf("hlavicka: %d\n", hlavicka);
-	}
-	
-	if (hlavicka < 0) { return 0; }
-	
-	int paticka = get(ptr - pamat + hlavicka);
-	
-	if (debug) {
-		printf("paticka: %d\n", paticka);
-	}
-		
-	if ((paticka < 0) || (hlavicka != paticka)) { return 0; }
-	
-	return 1;
-}
-
-// Sluzi na inicializaciu pamate, zbehne len raz
-void memory_init(void *ptr, unsigned int size) {
-	int i;
-	
-	size = size - (size % sizeof(int));
-	
-	pamat = ptr;
-	set(0, size);
-	set(sizeof(int), 2 * sizeof(int));
-	set(2 * sizeof(int), -(size - 4 * sizeof(int)));
-	set(3 * sizeof(int), -1);
-	set(4 * sizeof(int), -1);
-	set(get(0) - sizeof(int), -(size - 4 * sizeof(int)));
-	
-	for (i = 5 * sizeof(int); i < size - sizeof(int); i += sizeof(int)) {
-		set(i, 0);
-	}
-	
-	// Priprava na hlavicky variabilnej velkosti
-	/*if (size <= SCHAR_MAX) {
-		printf("Hlavicky velkosti 1B\n");
-		*(char *) pamat = 1;
-		*(signed char *) (pamat + 1) = (signed char) size;
-	}
-	else if (size <= SHRT_MAX) {
-		printf("Hlavicky velkosti 2B\n");
-		*(char *) pamat = 2;
-		*(short *) (pamat + 2) = (short) size;
-	}
-	else if (size <= INT_MAX) {
-		printf("Hlavicky velkosti 4B\n");
-		*(char *) pamat = 4;
-		*(int *) (pamat + 4) = (int) size;
-	}
-	else {
-		printf("Prilis velke pole!\n");
-		printf("Pre viac informacii kontaktuje Vasho systemoveho administratora.\n");
-	}*/
-}
-
-int main() {
-  char region[100];
-  memory_init(region, 100);
-  printf("Main dostal z memory_alloc: %d\n", memory_alloc(20) - pamat);
-  vypis();
-  getchar();
-  printf("Main dostal z memory_alloc: %d\n", memory_alloc(20) - pamat);
-  vypis();
-  getchar();
-  printf("Main dostal z memory_alloc: %d\n", memory_alloc(5) - pamat);
-  vypis();
-  getchar();
-  printf("Memory free 40: %d\n", memory_free(region + 40));
-  vypis();
-  getchar();
-  printf("Main dostal z memory_alloc: %d\n", memory_alloc(21) - pamat);
-  vypis();
-  getchar();
-  printf("Memory free 12: %d\n", memory_free(region + 12));
-  vypis();
-  getchar();
-  /*
-  printf("Memory check 12: %d\n", memory_check(region + 12));
-  printf("Memory free 12: %d\n", memory_free(region + 12));
-  printf("Memory check 12: %d\n", memory_check(region + 12));
+unsigned int hashFunc(char* s) {
+  unsigned int sucet=0, i=0;
   
-  char* pointer = (char*) memory_alloc(10);
-  if (pointer)
-    memset(pointer, 0, 10);
-  if (pointer)
-    memory_free(pointer);*/
-  return 0;
+  while (s[i]) {
+    sucet = sucet*31 + s[i];
+    i++;
+  }
+  
+  if (debug) {
+    printf("hashFunc: %d\n", sucet%velk_pola);
+  }
+
+  return sucet%velk_pola;
 }
 
+char *getuser(char *page, int k);
+
+// Vlozi user do bin. stromu akt
+void vlozUzivatela(UZIVATEL *akt, char *user) {
+  if (debug) {
+    printf("vlozUzivatela\n");
+    printf("akt->meno: %s\n", akt->meno);
+    printf("akt->pocetl: %d\n", akt->pocetl);
+    printf("akt->pocetp: %d\n", akt->pocetp);
+  }
+
+  while (1) {
+    if ((strcmp(user, akt->meno) < 0) && (akt->l == NULL)) {
+      if (debug) {
+        printf("Vlavo je volno\n");
+      }
+
+      break;
+    }
+    else if ((strcmp(user, akt->meno) > 0) && (akt->p == NULL)) {
+      if (debug) {
+        printf("Vpravo je volno\n");
+      }
+
+      break;
+    }
+    else if (strcmp(akt->meno, user) > 0) {
+      if (debug) {
+        printf("Meno je mensie nez %s\n", akt->meno);
+        printf("akt->pocetl + 1: %d\n", akt->pocetl + 1);
+      }
+      akt->pocetl = akt->pocetl + 1;
+      akt = akt->l;
+    }
+    else {
+      if (debug) {
+        printf("Meno je vacsie nez %s\n", akt->meno);
+        printf("akt->pocetp + 1: %d\n", akt->pocetp + 1);
+      }
+      akt->pocetp = akt->pocetp + 1;
+      akt = akt->p;
+    }
+  }
+  
+  if ((strcmp(user, akt->meno) < 0) && (akt->l == NULL)) {
+    akt->pocetl = akt->pocetl + 1;
+    akt->l = (UZIVATEL *) malloc (sizeof(UZIVATEL));
+    akt->l->meno = strdup(user);
+    akt->l->l = NULL;
+    akt->l->pocetl = 0;
+    akt->l->p = NULL;
+    akt->l->pocetp = 0;
+  }
+  else if ((strcmp(user, akt->meno) > 0) && (akt->p == NULL)) {
+    akt->pocetp = akt->pocetp + 1;
+    akt->p = (UZIVATEL *) malloc (sizeof(UZIVATEL));
+    akt->p->meno = strdup(user);
+    akt->p->l = NULL;
+    akt->p->pocetl = 0;
+    akt->p->p = NULL;
+    akt->p->pocetp = 0;
+  }
+}
+
+// Odoberie user z bin. stromu akt
+void odoberUzivatela(UZIVATEL *akt, char *user) {
+  UZIVATEL *pom, *pom2, *pred;
+
+  if (debug) {
+    printf("odoberUzivatela\n");
+    printf("user: %s\n", user);
+  }
+  
+  while ((akt->l != NULL) || (akt->p != NULL)) {
+    if ((akt->l != NULL) && (strcmp(akt->l->meno, user) == 0)) {
+      if (debug) {
+        printf("odoberany je vlavo\n");
+      }
+
+      akt->pocetl = akt->pocetl - 1;
+      break;
+    }
+    else if ((akt->p != NULL) && (strcmp(akt->p->meno, user) == 0)) {
+      if (debug) {
+        printf("odoberany je vpravo");
+      }
+
+      akt->pocetp = akt->pocetp - 1;
+      break;
+    }
+    
+    if (strcmp(akt->meno, user) > 0) {
+      if (debug) {
+        printf("odoberany je v lavom podstrome\n");
+      }
+
+      akt->pocetl = akt->pocetl - 1;
+      akt = akt->l;
+    }
+    else {
+      if (debug) {
+        printf("odoberany je v pravom podstrome\n");
+      }
+
+      akt->pocetp = akt->pocetp - 1;
+      akt = akt->p;
+    }
+  }
+  
+  if ((akt->l != NULL) && (strcmp(akt->l->meno, user) == 0)) {
+    if (debug) {
+      printf("odoberame laveho potomka\n");
+    }
+
+    pom = akt->l;
+
+    if (pom->l == NULL) {
+      if (debug) {
+        printf("ten nema laveho potomka\n");
+      }
+
+      akt->l = pom->p;
+      pom = NULL;
+    }
+    else if (pom->p == NULL) {
+      if (debug) {
+        printf("ten nema praveho potomka\n");
+      }
+      
+      akt->l = pom->l;
+      pom = NULL;
+    }
+    else {
+      if (debug) {
+        printf("ten ma oboch potomkov\n");
+      }
+      
+      pred = pom;
+      pom2 = pom->l;
+
+      if (pom2->p == NULL) {
+        pom->pocetl = pom2->pocetl;
+        strcpy(pom->meno, pom2->meno);
+        pom->l = pom2->l;
+        pom2 = NULL;
+      }
+      else {
+        while (pom2->p != NULL) {
+          if (pred->l == pom2) { pred->pocetl = pred->pocetl - 1; }
+          else { pred->pocetp = pred->pocetp - 1; }
+          pred = pom2;
+          pom2 = pom2->p;
+        }
+
+        strcpy(pom->meno, pom2->meno);
+        pred->p = pom2->l;
+        pom2 = NULL;
+      }
+    }
+  }
+  else if ((akt->p != NULL) && (strcmp(akt->p->meno, user) == 0)) {
+    if (debug) {
+      printf("odoberame praveho potomka\n");
+    }
+    
+    pom = akt->p;
+
+    if (pom->l == NULL) {
+      if (debug) {
+        printf("ten nema laveho potomka\n");
+      }
+
+      akt->p = pom->p;
+      pom = NULL;
+    }
+    else if (pom->p == NULL) {
+      if (debug) {
+        printf("ten nema praveho potomka\n");
+      }
+      
+      akt->p = pom->l;
+      pom = NULL;
+    }
+    else {
+      if (debug) {
+        printf("ten ma oboch potomkov\n");
+      }
+      
+      pred = pom;
+      pom2 = pom->l;
+
+      if (pom2->p == NULL) {
+        pom->pocetl = pom2->pocetl;
+        strcpy(pom->meno, pom2->meno);
+        pom->l = pom2->l;
+        pom2 = NULL;
+      }
+      else {
+        while (pom2->p != NULL) {
+          if (pred->l == pom2) { pred->pocetl = pred->pocetl - 1; }
+          else { pred->pocetp = pred->pocetp - 1; }
+          pred = pom2;
+          pom2 = pom2->p;
+        }
+
+        strcpy(pom->meno, pom2->meno);
+        pred->p = pom2->l;
+        pom2 = NULL;
+      }
+    }
+  }
+}
+
+char* vratUzivatela(UZIVATEL *akt, int k) {
+  int pom = k;
+  
+  if (debug) {
+    printf("vratUzivatela\n");
+  }
+
+  if (k > (akt->pocetl + akt->pocetp + 1)) {
+    if (debug) {
+      printf("Tolko pouzivatelov nie je!\n");
+    }
+
+    return NULL;
+  }
+  else {
+    while (pom != (akt->pocetl + 1)) {
+      if (pom <= akt->pocetl) {
+        akt = akt->l;
+      }
+      else {
+        pom = pom - akt->pocetl - 1;
+        akt = akt->p;
+      }
+    }
+    
+    if (debug) {
+      printf("Meno: %s\n", akt->meno);
+    }
+
+    return strdup(akt->meno);
+  }
+
+  return NULL;
+}
+
+void init() {
+  int i;
+  for (i = 0; i < velk_pola; i++)
+    pole[i] = NULL;
+}
+
+void like(char *page, char *user) {
+  if (debug) {
+    printf("LIKE\n");
+    printf("page: %s\n", page);
+    printf("user: %s\n", user);
+  }
+
+  int j, hf = hashFunc(page);
+
+  // Ak stranka neexistuje alebo nastane
+  // kolizia s neexistujucou (NULL) strankou
+  if (pole[hf] == NULL) {
+    if (hf == (velk_pola - 1)) { j = 0; }
+    else { j = hf + 1; }
+    
+    while (j != hf) {
+      if ((pole[j] != NULL) && (strcmp(pole[j]->meno, page) == 0)) {
+        break;
+      }
+
+      if (j == (velk_pola - 1)) { j = 0; }
+      else { j++; }
+    }
+
+    if (pole[j] == NULL) {
+      if (debug) {
+        printf("Prve vytvorenie stranky\n");
+      }
+
+      pole[hf] = (STRANKA *) malloc (sizeof(STRANKA));
+      pole[hf]->meno = (char *) malloc ((strlen(page) + 1) * sizeof(char));
+      strcpy(pole[hf]->meno, page);
+      pole[hf]->uzivatelia = (UZIVATEL *) malloc (sizeof(UZIVATEL));
+      pole[hf]->uzivatelia->meno = strdup(user);
+      pole[hf]->uzivatelia->pocetl = 0;
+      pole[hf]->uzivatelia->pocetp = 0;
+      pole[hf]->uzivatelia->l = NULL;
+      pole[hf]->uzivatelia->p = NULL;
+    }
+    else if (strcmp(pole[j]->meno, page) == 0) {
+      if (debug) {
+        printf("Stranka uz existuje po kolizii\n");
+      }
+
+      vlozUzivatela(pole[j]->uzivatelia, user);
+    }
+  }
+  else if (strcmp(pole[hf]->meno, page) == 0) {
+    if (debug) {
+      printf("Stranka uz existuje\n");
+    }
+
+    vlozUzivatela(pole[hf]->uzivatelia, user);
+  }
+  else {
+    j = hf + 1;
+
+    // Zisti ci stranka uz existuje
+    while (j != hf) {
+      if ((pole[j] != NULL) && (strcmp(pole[j]->meno, page) == 0)) {
+        break;
+      }
+      
+      if (j == (velk_pola - 1)) { j = 0; }
+      else { j++; }
+    }
+
+    // Ak neexistuje tak najde prvy volny blok
+    if (strcmp(pole[j]->meno, page) != 0) {
+      if (debug) {
+        printf("Stranka neexistuje po kolizii");
+      }
+
+      while (pole[j] != NULL) {
+        if (j == (velk_pola - 1)) { j = 0; }
+        else { j++; }
+      }
+    }
+
+    if (debug) {
+      printf("kolizia, j: %d\n", j);
+    }
+
+    if (pole[j] == NULL) {
+      if (debug) {
+        printf("Prve vytvorenie stranky po kolizii\n");
+      }
+
+      pole[j] = (STRANKA *) malloc (sizeof(STRANKA));
+      pole[j]->meno = (char *) malloc ((strlen(user) + 1) * sizeof(char));
+      strcpy(pole[j]->meno, page);
+      pole[j]->uzivatelia = (UZIVATEL *) malloc (sizeof(UZIVATEL));
+      pole[j]->uzivatelia->meno = strdup(user);
+      pole[j]->uzivatelia->pocetl = 0;
+      pole[j]->uzivatelia->pocetp = 0;
+      pole[j]->uzivatelia->l = NULL;
+      pole[j]->uzivatelia->p = NULL;
+    }
+    else if (strcmp(pole[j]->meno, page) == 0) {
+      if (debug) {
+        printf("Stranka uz existuje po kolizii\n");
+      }
+
+      vlozUzivatela(pole[j]->uzivatelia, user);
+    }
+  }
+}
+      
+void unlike(char *page, char *user) {
+  if (debug) {
+    printf("UNLIKE\n");
+    printf("page: %s\n", page);
+    printf("user: %s\n", user);
+  }
+
+  int j, hf = hashFunc(page);
+  
+  UZIVATEL *pred, *pom;
+  unsigned int poc = 0;	//kontrola ci zbehol while
+  
+  // Ak stranka neexistuje alebo nastane
+  // kolizia s neexistujucou (NULL) strankou
+  if (pole[hf] == NULL) {
+    if (hf == (velk_pola - 1)) { j = 0; }
+    else { j = hf + 1; }
+    
+    while (j != hf) {
+      if ((pole[j] != NULL) && (strcmp(pole[j]->meno, page) == 0)) {
+        break;
+      }
+
+      if (j == (velk_pola - 1)) { j = 0; }
+      else { j++; }
+    }
+
+    if (pole[j] == NULL) {
+      if (debug) {
+        printf("Stranka neexistuje\n");
+      }
+
+      return;
+    }
+    else if (strcmp(pole[j]->meno, page) == 0) {
+      if (debug) {
+        printf("kolizia, j: %d\n", j);
+      }
+      
+      if (pole[j] == NULL) {
+        if (debug) {
+          printf("Stranka neexistuje po kolizii\n");
+        }
+        
+        return;
+      }
+      else if (strcmp(pole[j]->meno, page) == 0) {
+        if (debug) {
+          printf("Stranka uz existuje po kolizii\n");
+        }
+        
+        if ((strcmp(pole[j]->uzivatelia->meno, user) == 0) && (pole[j]->uzivatelia->l == NULL) && (pole[j]->uzivatelia->p == NULL)) {
+          if (debug) {
+            printf("Vymazanie posledneho (jedineho) like-u po kolizii\n");
+          }
+          
+          pole[j] = NULL;
+          return;
+        }
+        else if ((strcmp(pole[j]->uzivatelia->meno, user) == 0) && (pole[j]->uzivatelia->l == NULL)) {
+          if (debug) {
+            printf("Odobera koren, vlavo nic neni po kolizii\n");
+          }
+          
+          *pole[j]->uzivatelia = *pole[j]->uzivatelia->p;
+          return;
+        }
+        else if ((strcmp(pole[j]->uzivatelia->meno, user) == 0) && (pole[j]->uzivatelia->p == NULL)){
+          if (debug) {
+            printf("Odobera koren, vpravo nic neni po kolizii\n");
+          }
+          
+          *pole[j]->uzivatelia = *pole[j]->uzivatelia->l;
+          return;
+        }
+        else if (strcmp(pole[j]->uzivatelia->meno, user) == 0) {
+          if (debug) {
+            printf("Odobera koren, ma obidvoch potomkov po kolizii\n");
+          }
+          
+          pole[j]->uzivatelia->pocetl = (pole[j]->uzivatelia->pocetl - 1);
+          pred = pole[j]->uzivatelia;
+          pom = pole[j]->uzivatelia->l;
+          
+          while (pom->p != NULL) {
+            pom->pocetp = (pom->pocetp - 1);
+            pred = pom;
+            pom = pom->p;
+            poc++;
+          }
+          
+          if (poc == 0) {
+            strcpy(pole[j]->uzivatelia->meno, pom->meno);
+            
+            if (pom->l == NULL) {
+              pole[j]->uzivatelia->l = NULL;
+              pole[j]->uzivatelia->pocetl = 0;
+            }
+            else { *pole[j]->uzivatelia->l = *pom->l; }
+          }
+          else {
+            strcpy(pole[j]->uzivatelia->meno, pom->meno);
+
+            if (pom->l == NULL) {
+              pred->p = NULL;
+              pred->pocetp = 0;
+            }
+            else { pred->p = pom->l; }
+          }
+        
+          return;
+        }
+
+        if (debug) {
+          printf("Vymazanie ne-korena po kolizii\n");
+        }
+
+        odoberUzivatela(pole[j]->uzivatelia, user);
+      }
+
+      return;
+    }
+  }
+  // Ak stranka existuje (bez kolizie)
+  else if (strcmp(pole[hf]->meno, page) == 0) {
+    // Ak je odoberany prvok koren
+    if ((strcmp(pole[hf]->uzivatelia->meno, user) == 0) && (pole[hf]->uzivatelia->l == NULL) && (pole[hf]->uzivatelia->p == NULL)){
+      if (debug) {
+        printf("Vymazanie posledneho (jedineho) like-u\n");
+      }
+
+      pole[hf] = NULL;
+      return;
+    }
+    else if ((strcmp(pole[hf]->uzivatelia->meno, user) == 0) && (pole[hf]->uzivatelia->l == NULL)){
+      if (debug) {
+        printf("Odobera koren, vlavo nic neni\n");
+      }
+
+      *pole[hf]->uzivatelia = *pole[hf]->uzivatelia->p;
+      return;
+    }
+    else if ((strcmp(pole[hf]->uzivatelia->meno, user) == 0) && (pole[hf]->uzivatelia->p == NULL)){
+      if (debug) {
+        printf("Odobera koren, vpravo nic neni\n");
+      }
+
+      *pole[hf]->uzivatelia = *pole[hf]->uzivatelia->l;
+      return;
+    }
+    else if (strcmp(pole[hf]->uzivatelia->meno, user) == 0) {
+      if (debug) {
+        printf("Odobera koren, ma obidvoch potomkov\n");
+      }
+      
+      pole[hf]->uzivatelia->pocetl = (pole[hf]->uzivatelia->pocetl - 1);
+      pred = pole[hf]->uzivatelia;
+      pom = pole[hf]->uzivatelia->l;
+
+      while (pom->p != NULL) {
+        pom->pocetp = (pom->pocetp - 1);
+        pred = pom;
+        pom = pom->p;
+        poc++;
+      }
+
+      if (poc == 0) {
+        strcpy(pole[hf]->uzivatelia->meno, pom->meno);
+
+        if (pom->l == NULL) {
+          pole[hf]->uzivatelia->l = NULL;
+          pole[hf]->uzivatelia->pocetl = 0;
+        }
+        else { *pole[hf]->uzivatelia->l = *pom->l; }
+      }
+      else {
+        strcpy(pole[hf]->uzivatelia->meno, pom->meno);
+
+        if (pom->l == NULL) {
+          pred->p = NULL;
+          pred->pocetp = 0;
+        }
+        else { pred->p = pom->l; }
+      }
+      
+      return;
+    }
+
+    if (debug) {
+      printf("Vymazanie ne-korena\n");
+    }
+
+    odoberUzivatela(pole[hf]->uzivatelia, user);
+  }
+  // Ak nastane kolizia
+  else {
+    j = hf + 1;
+
+    // Zisti ci stranka uz existuje
+    while (j != hf) {
+      if ((pole[j] != NULL) && (strcmp(pole[j]->meno, page) == 0)) {
+        break;
+      }
+      
+      if (j == (velk_pola - 1)) { j = 0; }
+      else { j++; }
+    }
+
+    if (debug) {
+      printf("kolizia, j: %d\n", j);
+    }
+
+    if ((pole[j] == NULL) || (strcmp(pole[j]->meno, page) != 0)) {
+      if (debug) {
+        printf("Stranka neexistuje po kolizii\n");
+      }
+
+      return;
+    }
+    else if (strcmp(pole[j]->meno, page) == 0) {
+      if (debug) {
+        printf("Stranka uz existuje po kolizii\n");
+      }
+
+      if ((strcmp(pole[j]->uzivatelia->meno, user) == 0) && (pole[j]->uzivatelia->l == NULL) && (pole[j]->uzivatelia->p == NULL)) {
+        if (debug) {
+          printf("Vymazanie posledneho (jedineho) like-u po kolizii\n");
+        }
+
+        pole[j] = NULL;
+        return;
+      }
+      else if ((strcmp(pole[j]->uzivatelia->meno, user) == 0) && (pole[j]->uzivatelia->l == NULL)){
+        if (debug) {
+          printf("Odobera koren, vlavo nic neni po kolizii\n");
+        }
+
+        *pole[j]->uzivatelia = *pole[j]->uzivatelia->p;
+        return;
+      }
+      else if ((strcmp(pole[j]->uzivatelia->meno, user) == 0) && (pole[j]->uzivatelia->p == NULL)){
+        if (debug) {
+          printf("Odobera koren, vpravo nic neni po kolizii\n");
+        }
+
+        *pole[j]->uzivatelia = *pole[j]->uzivatelia->l;
+        return;
+      }
+      else if (strcmp(pole[j]->uzivatelia->meno, user) == 0) {
+        if (debug) {
+          printf("Odobera koren, ma obidvoch potomkov po kolizii\n");
+        }
+        
+        pole[j]->uzivatelia->pocetl = (pole[j]->uzivatelia->pocetl - 1);
+        pred = pole[j]->uzivatelia;
+        pom = pole[j]->uzivatelia->l;
+
+        while (pom->p != NULL) {
+          pom->pocetp = (pom->pocetp - 1);
+          pred = pom;
+          pom = pom->p;
+          poc++;
+        }
+
+        if (poc == 0) {
+          strcpy(pole[j]->uzivatelia->meno, pom->meno);
+
+          if (pom->l == NULL) {
+            pole[j]->uzivatelia->l = NULL;
+            pole[j]->uzivatelia->pocetl = 0;
+          }
+          else { *pole[j]->uzivatelia->l = *pom->l; }
+        }
+        else {
+          strcpy(pole[j]->uzivatelia->meno, pom->meno);
+
+          if (pom->l == NULL) {
+            pred->p = NULL;
+            pred->pocetp = 0;
+          }
+          else { pred->p = pom->l; }
+        }
+        
+        return;
+      }
+
+      if (debug) {
+        printf("Vymazanie ne-korena po kolizii\n");
+      }
+
+      odoberUzivatela(pole[j]->uzivatelia, user);
+    }
+  }
+}
+
+char *getuser(char *page, int k) {
+  if (debug) {
+    printf("GETUSER\n");
+    printf("page: %s\n", page);
+    printf("k: %d\n", k);
+  }
+
+  int j, hf = hashFunc(page);
+  
+  // Ak stranka neexistuje alebo nastane
+  // kolizia s neexistujucou (NULL) strankou
+  if (pole[hf] == NULL) {
+    if (hf == (velk_pola - 1)) { j = 0; }
+    else { j = hf + 1; }
+
+    while (j != hf) {
+      if ((pole[j] != NULL) && (strcmp(pole[j]->meno, page) == 0)) {
+        break;
+      }
+
+      if (j == (velk_pola - 1)) { j = 0; }
+      else { j++; }
+    }
+
+    if (pole[j] == NULL) {
+      if (debug) {
+        printf("Stranka neexistuje\n");
+      }
+
+      return NULL;
+    }
+    else if (strcmp(pole[j]->meno, page) == 0) {
+      if (debug) {
+        printf("kolizia, j: %d\n", j);
+        printf("Stranka uz existuje po kolizii\n");
+      }
+      
+      return vratUzivatela(pole[j]->uzivatelia, k);
+    }
+
+    return NULL;
+  }
+  // Ak stranka existuje (bez kolizie)
+  else if (strcmp(pole[hf]->meno, page) == 0) {
+    if (debug) {
+      printf("Stranka uz existuje\n");
+    }
+
+    return vratUzivatela(pole[hf]->uzivatelia, k);
+  }
+  // Ak nastane kolizia
+  else {
+    j = hf + 1;
+
+    // Zisti ci stranka uz existuje
+    while (j != hf) {
+      if ((pole[j] != NULL) && (strcmp(pole[j]->meno, page) == 0)) {
+        break;
+      }
+      
+      if (j == (velk_pola - 1)) { j = 0; }
+      else { j++; }
+    }
+
+    if ((pole[j] == NULL) || (strcmp(pole[j]->meno, page) != 0)) {
+      if (debug) {
+        printf("Stranka neexistuje po kolizii\n");
+      }
+
+      return NULL;
+    }
+    else if (strcmp(pole[j]->meno, page) == 0) {
+      if (debug) {
+        printf("kolizia, j: %d\n", j);
+        printf("Stranka uz existuje po kolizii\n");
+      }
+      
+      return vratUzivatela(pole[j]->uzivatelia, k);
+    }
+  }
+
+  return NULL;
+}
+            
+// Tlacidlo 'Spustit' vyskusa vasu socialnu siet na testovacich scenaroch.
+// Vlastna funkcia main() nie je potrebna, a nebude sa spustat.
+// Vlastna funkcia main() je pre vase osobne testovanie. Dolezite: pri testovacich scenaroch sa nebude spustat!
+int main() {
+  init();
+  like("Star Trek", "Jana");
+  like("Star Wars", "Marek");
+  like("Star Trek", "Filip");
+  like("Star Trek", "Adam");
+  printf("%s\n", getuser("Star Trek", 1)); // Adam
+  printf("%s\n", getuser("Star Trek", 2)); // Filip
+  unlike("Star Trek", "Filip");
+  printf("%s\n", getuser("Star Trek", 1)); // Adam
+  unlike("Star Trek", "Jana");
+
+  if (getuser("Star Trek", 1) == NULL) {
+    printf("NULL\n");
+  }
+  else {
+    printf("%s\n", getuser("Star Trek", 1));
+  }
+
+  printf("%s\n", getuser("Star Wars", 1)); // Marek
+  return 0;
+} 
